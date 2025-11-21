@@ -3,3 +3,4 @@ pandas
 plotly
 pytz
 google-generativeai
+fpdf
