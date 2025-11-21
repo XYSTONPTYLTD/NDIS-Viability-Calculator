@@ -27,7 +27,6 @@ st.markdown("""
     .metric-delta { font-size: 0.8rem; margin-top: 5px; }
     .stButton button { border-radius: 8px; font-weight: 600; transition: all 0.2s; }
     h1, h2, h3 { font-family: 'Inter', sans-serif; letter-spacing: -0.5px; }
-    .prompt-box { background-color: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155; font-family: monospace; white-space: pre-wrap; font-size: 0.85em; color: #a5b4fc; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -36,7 +35,6 @@ st.markdown("""
 # ==============================================================================
 def get_ai_analysis(api_key, ctx):
     """Fetches a professional report from Google Gemini."""
-    if not api_key: return "⚠️ API Key missing."
     try:
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-2.0-flash')
@@ -81,7 +79,7 @@ with st.sidebar:
         <div style="text-align: center; padding: 20px 0;">
             <h1 style="font-size: 3.5rem; margin:0; line-height: 1;">🛡️</h1>
             <h2 style="font-weight: 900; letter-spacing: 3px; margin:0; color: #fff;">XYSTON</h2>
-            <p style="font-size: 0.7rem; opacity: 0.6; font-family: monospace; letter-spacing: 1px;">NDIS MASTER v2025.7</p>
+            <p style="font-size: 0.7rem; opacity: 0.6; font-family: monospace; letter-spacing: 1px;">NDIS MASTER v2025.8</p>
         </div>
         <div style="height: 1px; background: linear-gradient(90deg, transparent, #333, transparent); margin: 0 0 20px 0;"></div>
     """, unsafe_allow_html=True)
@@ -89,7 +87,7 @@ with st.sidebar:
     # API Key
     api_key = st.secrets.get("GEMINI_API_KEY", None)
     if not api_key:
-        with st.expander("🔐 AI Settings (Optional)"):
+        with st.expander("🔐 AI Settings"):
             api_key = st.text_input("Google API Key", type="password")
 
     # Inputs
@@ -216,20 +214,14 @@ fig.update_layout(height=350, hovermode="x unified", margin=dict(t=20, b=0, l=0,
                   legend=dict(orientation="h", y=1.1))
 st.plotly_chart(fig, use_container_width=True)
 
-# 5. DUAL-MODE AI REPORT (The Merge)
+# 5. AI REPORT (API Only)
 st.markdown("---")
-st.markdown("### 🤖 Professional Assessment")
-
-# Radio to switch between API and Manual Prompt
-ai_method = st.radio("Method", ["Auto-Generate (Gemini)", "Manual Prompt (Free)"], horizontal=True, label_visibility="collapsed")
-
-if ai_method == "Auto-Generate (Gemini)":
-    # === API MODE ===
-    c_ai1, c_ai2 = st.columns([3,1])
-    with c_ai1: st.caption("Drafts a formal file note using your API Key.")
-    with c_ai2: generate = st.button("Generate Note ✨", type="primary", use_container_width=True)
-    
-    if generate:
+c_ai1, c_ai2 = st.columns([3,1])
+with c_ai1:
+    st.markdown("### 🤖 Professional Assessment")
+    st.caption("Generates a formal file note for your CRM using Google Gemini.")
+with c_ai2:
+    if st.button("Generate Note ✨", type="primary", use_container_width=True):
         if api_key:
             with st.spinner("Drafting..."):
                 ctx = {"status": status, "balance": current_balance, "weekly_cost": weekly_cost, 
@@ -239,35 +231,7 @@ if ai_method == "Auto-Generate (Gemini)":
                 st.success("Drafted!")
                 st.text_area("Copy to CRM:", value=report, height=300)
         else:
-            st.error("Add API Key in sidebar first.")
-
-else:
-    # === MANUAL PROMPT BRIDGE MODE ===
-    st.caption("Copy this prompt into **Grok**, **ChatGPT**, or **Claude** for a free professional report.")
-    
-    prompt_text = f"""Act as a Senior Australian NDIS Support Coordinator (Level 3 Specialist). 
-Write a formal "Viability & Strategy Report" for a participant file.
-
-**CONTEXT & DATA:**
-- **Status:** {status}
-- **Current Funds:** ${current_balance:,.2f} (Portal Truth)
-- **Plan Duration:** {weeks_remaining:.1f} weeks remaining (Ends {plan_end.strftime('%d/%m/%Y')})
-- **Burn Rate:** {hours_per_week} hrs/week (${weekly_cost:,.2f}/week)
-- **Projected Outcome:** {('Surplus of $' + "{:,.2f}".format(surplus)) if surplus > 0 else ('Shortfall of -$' + "{:,.2f}".format(abs(surplus)))}
-- **Runway:** {runway_weeks:.1f} weeks (Buffer: {buffer:+.1f} weeks)
-
-**INSTRUCTIONS:**
-1. **Tone:** Professional, objective, imperative, Australian English (e.g. 'Utilise', 'Minimise').
-2. **Format:** Use the following structure:
-   - **Executive Summary:** One concise paragraph on the file's overall viability.
-   - **Financial Health Check:** Bullet points analysing the burn rate vs. budget.
-   - **Risk Assessment:** Identify specific risks based on the data.
-   - **Action Plan:** 3 specific, imperative recommendations (e.g., "Reduce billing to {break_even:.1f} hrs/week immediately").
-
-**CONSTRAINT:** Do not include filler text. Go straight to the report.
-"""
-    st.code(prompt_text, language="text")
-    st.markdown(f"[Open Grok](https://x.com/i/grok) | [Open ChatGPT](https://chat.openai.com)")
+            st.error("Please add your Google API Key in the sidebar to use this feature.")
 
 # FOOTER
 st.markdown("---")
