@@ -4,14 +4,12 @@ from datetime import timedelta
 import plotly.express as px
 import pandas as pd
 import pytz
+import os
+import google.generativeai as genai
 
 # ==============================================================================
-# NDIS VIABILITY MASTER - AUSTRALIAN EDITION (2025)
-# Built by Chas Walker | Xyston.com.au
-# Features: Clean UI, Fixed Sidebar, Fancy Donation Button
+# CONFIGURATION & ASSETS
 # ==============================================================================
-
-# 1. PAGE CONFIGURATION
 st.set_page_config(
     page_title="NDIS Master | Xyston",
     layout="wide",
@@ -19,253 +17,247 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. TIMEZONE SETUP (Perth/Australia)
+# Custom CSS for that "Pro" look
+st.markdown("""
+<style>
+    .reportview-container .main .block-container{ padding-top: 2rem; }
+    .stMetric { background-color: #0e1117; padding: 10px; border-radius: 5px; border: 1px solid #262730; }
+    .status-banner { padding: 20px; border-radius: 10px; text-align: center; margin-bottom: 20px; border: 2px solid; }
+    h1, h2, h3 { font-family: 'Inter', sans-serif; }
+</style>
+""", unsafe_allow_html=True)
+
+# ==============================================================================
+# UTILITIES
+# ==============================================================================
+def get_ai_analysis(api_key, context_data):
+    """Fetches a professional report from Google Gemini."""
+    if not api_key:
+        return "⚠️ API Key missing. Please add it to Streamlit Secrets or sidebar."
+    
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        
+        prompt = f"""
+        Act as a Senior NDIS Support Coordinator (Australia). 
+        Write a concise 'Viability & Strategy Note' (max 200 words) for a participant file based on this live data:
+        
+        - **Status:** {context_data['status']}
+        - **Weeks Remaining in Plan:** {context_data['weeks_remaining']:.1f}
+        - **Current Funds:** ${context_data['balance']:,.2f}
+        - **Burn Rate:** ${context_data['weekly_cost']:,.2f}/week
+        - **Projected Outcome:** ${context_data['surplus_shortfall']:,.2f} ({'Surplus' if context_data['surplus_shortfall'] > 0 else 'Shortfall'})
+        
+        Provide 3 clear, actionable strategic dot points for the coordinator to manage this specific financial trajectory. 
+        Tone: Professional, risk-aware, Australian English.
+        """
+        
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"⚠️ Error generating report: {str(e)}"
+
+# Timezone Setup
 try:
     perth_tz = pytz.timezone('Australia/Perth')
     today = datetime.datetime.now(perth_tz).date()
 except:
     today = datetime.date.today()
 
-# 3. RATES DATABASE (2025)
+# Rates
 RATES = {
     "Level 2: Coordination of Supports": 100.14,
     "Level 3: Specialist Support Coordination": 190.41
 }
 
 # ==============================================================================
-# SIDEBAR - INPUTS
+# SIDEBAR
 # ==============================================================================
 with st.sidebar:
-    # --- BRANDING (Clean Text - No Broken Images) ---
-    st.markdown(
-        """
-        <div style="text-align: center; margin-bottom: 20px;">
-            <h1 style="font-size: 3em; margin: 0;">🛡️</h1>
-            <h2 style="font-weight: 800; margin: 0; color: #fafafa;">XYSTON</h2>
-            <p style="font-size: 0.8em; opacity: 0.7;">NDIS Master Calc v2025.3</p>
+    # BRANDING
+    st.markdown("""
+        <div style="text-align: center; margin-bottom: 10px;">
+            <h1 style="font-size: 3rem; margin:0;">🛡️</h1>
+            <h2 style="font-weight: 900; letter-spacing: 2px; margin:0;">XYSTON</h2>
+            <p style="font-size: 0.8rem; opacity: 0.7; font-family: monospace;">NDIS Master v2025.4</p>
         </div>
-        """, 
-        unsafe_allow_html=True
-    )
-    st.divider()
+        <hr style="margin: 10px 0;">
+    """, unsafe_allow_html=True)
 
-    st.header("1. Plan Settings")
-    
-    # Rate Selector
+    # API KEY HANDLING (Secrets or Input)
+    api_key = st.secrets.get("GEMINI_API_KEY", None)
+    if not api_key:
+        with st.expander("🔐 AI Settings (Optional)"):
+            api_key = st.text_input("Enter Google API Key", type="password")
+
+    # INPUTS
+    st.markdown("#### 1. Setup")
     support_type = st.selectbox("Support Level", list(RATES.keys()))
-    default_rate = RATES[support_type]
-    hourly_rate = st.number_input("Hourly Rate ($)", value=default_rate, step=0.01)
+    hourly_rate = st.number_input("Hourly Rate ($)", value=RATES[support_type], step=0.01)
 
-    st.divider()
+    st.markdown("#### 2. Time")
+    mode = st.radio("Input Mode", ["Dates", "Weeks"], horizontal=True, label_visibility="collapsed")
     
-    st.header("2. Critical Dates")
-    # Date Inputs with Australian Format (DD/MM/YYYY)
-    plan_start = st.date_input(
-        "Plan Start Date", 
-        value=today - timedelta(weeks=12),
-        format="DD/MM/YYYY"
-    )
-    plan_end = st.date_input(
-        "Plan End Date", 
-        value=today + timedelta(weeks=40),
-        format="DD/MM/YYYY"
-    )
+    if mode == "Dates":
+        plan_end = st.date_input("Plan End Date", value=today + timedelta(weeks=40), format="DD/MM/YYYY")
+        if plan_end <= today:
+            st.error("End date must be future.")
+            st.stop()
+        days_remaining = (plan_end - today).days
+        weeks_remaining = days_remaining / 7
+    else:
+        weeks_remaining = st.number_input("Weeks Remaining", value=40.0, step=0.5)
+        days_remaining = int(weeks_remaining * 7)
+        plan_end = today + timedelta(days=days_remaining)
 
-    # Date Validation
-    if plan_end <= today:
-        st.error("⚠️ Plan End Date must be in the future.")
-        st.stop()
-        
-    days_remaining = (plan_end - today).days
-    weeks_remaining = days_remaining / 7
-    
-    st.caption(f"📅 Today is {today.strftime('%d/%m/%Y')}. **{weeks_remaining:.1f} weeks** remaining.")
+    st.caption(f"📅 **{weeks_remaining:.1f} weeks** remaining")
 
-    st.divider()
+    st.markdown("#### 3. Money (Portal Truth)")
+    total_budget = st.number_input("Original Budget ($)", value=18000.0, step=100.0)
+    current_balance = st.number_input("Current Portal Balance ($)", value=14500.0, step=50.0)
 
-    st.header("3. Portal Financials")
-    total_budget = st.number_input("Total Original Budget ($)", value=18000.0, step=100.0)
-    current_balance = st.number_input(
-        "Current Portal Balance ($)", 
-        value=14500.0, 
-        step=50.0, 
-        help="Enter the EXACT amount currently available in the PRODA portal."
-    )
-
-    st.divider()
-    
-    st.header("4. Your Billing")
+    st.markdown("#### 4. Billing")
     hours_per_week = st.number_input("Planned Hours/Week", value=1.5, step=0.1)
-    
+
     st.markdown("---")
-    
-    # --- DONATION BUTTON (FANCY) ---
-    st.markdown(
-        """
+    st.markdown("""
         <div style="text-align: center;">
-            <p style="font-size: 0.9em; color: #666;">Find this tool useful?</p>
             <a href="https://www.buymeacoffee.com/h0m1ez187" target="_blank">
-                <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 50px !important;width: 180px !important;" >
+                <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 40px !important;width: 150px !important;" >
             </a>
         </div>
-        """,
-        unsafe_allow_html=True
-    )
+    """, unsafe_allow_html=True)
 
 # ==============================================================================
-# LOGIC CORE
+# LOGIC ENGINE
 # ==============================================================================
-
-# 1. Costs
 weekly_cost = hours_per_week * hourly_rate
-
-# 2. Runway Calculation
-if weekly_cost > 0:
-    runway_weeks = current_balance / weekly_cost
-else:
-    runway_weeks = 999 
-
+runway_weeks = current_balance / weekly_cost if weekly_cost > 0 else 999
 depletion_date = today + timedelta(days=int(runway_weeks * 7))
 
-# 3. Gap Analysis
 required_to_finish = weekly_cost * weeks_remaining
 surplus_shortfall = current_balance - required_to_finish
-spent_so_far = max(0, total_budget - current_balance)
-utilisation_pct = (spent_so_far / total_budget) * 100 if total_budget > 0 else 0
+buffer_weeks = runway_weeks - weeks_remaining
 
-# 4. Status Determination
-buffer_ratio = runway_weeks / weeks_remaining if weeks_remaining > 0 else 0
-
-if buffer_ratio >= 1.2:
-    status_title = "🟢 PLATINUM CLIENT"
-    status_desc = "Safe Surplus. Excellent viability."
-    status_colour = "#00cc66" # Green
-    bg_colour = "rgba(0, 204, 102, 0.1)"
-elif buffer_ratio >= 1.0:
-    status_title = "🟢 VIABLE (ON TRACK)"
-    status_desc = "Fully funded for the remaining time."
-    status_colour = "#66ff66" # Light Green
-    bg_colour = "rgba(102, 255, 102, 0.1)"
-elif buffer_ratio >= 0.85:
-    status_title = "🟡 MARGINAL (MONITOR)"
-    status_desc = "Tight budget. Watch billing closely."
-    status_colour = "#ffd700" # Gold
-    bg_colour = "rgba(255, 215, 0, 0.1)"
+# Status Logic
+if runway_weeks >= weeks_remaining * 1.2:
+    status = "PLATINUM CLIENT"
+    color = "#10b981" # Emerald
+    bg = "rgba(16, 185, 129, 0.1)"
+    msg = "Safe Surplus. Excellent viability."
+elif runway_weeks >= weeks_remaining:
+    status = "VIABLE (ON TRACK)"
+    color = "#22c55e" # Green
+    bg = "rgba(34, 197, 94, 0.1)"
+    msg = "Fully funded for remaining time."
+elif runway_weeks >= max(0, weeks_remaining - 2):
+    status = "TIGHT (MONITOR)"
+    color = "#eab308" # Yellow
+    bg = "rgba(234, 179, 8, 0.1)"
+    msg = "Tight budget. Watch billing closely."
 else:
-    status_title = "🔴 HIGH RISK / NON-VIABLE"
-    status_desc = "Insufficient funds. Immediate action required."
-    status_colour = "#ff4444" # Red
-    bg_colour = "rgba(255, 68, 68, 0.1)"
+    status = "NON-VIABLE"
+    color = "#ef4444" # Red
+    bg = "rgba(239, 68, 68, 0.1)"
+    msg = "Insufficient funds. Action required."
 
 # ==============================================================================
-# MAIN DASHBOARD UI
+# MAIN DASHBOARD
 # ==============================================================================
 
-# Header
-col_head1, col_head2 = st.columns([4, 1])
-with col_head1:
-    st.title("🛡️ NDIS Viability Master")
-    st.caption(f"Fail-Safe Analysis • {support_type.split(':')[0]}")
-with col_head2:
-    st.markdown("#### **Xyston**")
-
-st.divider()
-
-# Status Banner
+# 1. STATUS BANNER
 st.markdown(f"""
-    <div style="
-        border: 2px solid {status_colour}; 
-        border-radius: 12px; 
-        padding: 20px; 
-        background-color: {bg_colour}; 
-        text-align: center; 
-        margin-bottom: 25px;">
-        <h2 style="color: {status_colour}; margin: 0; font-weight: 800;">{status_title}</h2>
-        <p style="margin-top: 8px; font-size: 1.1em; opacity: 0.9;">{status_desc}</p>
+    <div class="status-banner" style="border-color: {color}; background-color: {bg};">
+        <h1 style="color: {color}; margin:0;">{status}</h1>
+        <p style="margin: 5px 0 0 0; opacity: 0.8;">{msg}</p>
+        <div style="margin-top: 10px; font-weight: bold; color: {color};">
+            Runway: {runway_weeks:.1f} wks <span style="color: #666;">vs</span> Plan: {weeks_remaining:.1f} wks
+        </div>
     </div>
 """, unsafe_allow_html=True)
 
-# Metrics Row
+# 2. METRICS
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("Current Balance", f"${current_balance:,.2f}", help="From Portal")
-m2.metric("Weekly Cost", f"${weekly_cost:,.2f}", f"{hours_per_week} hrs/wk")
-m3.metric("Depletion Date", depletion_date.strftime("%d/%m/%Y"), 
-          delta=f"{abs((depletion_date - plan_end).days)} days {'early' if depletion_date < plan_end else 'buffer'}",
-          delta_color="inverse" if depletion_date < plan_end else "normal")
-m4.metric("End Result", f"${surplus_shortfall:,.2f}", 
-          "Surplus" if surplus_shortfall > 0 else "Shortfall",
+m1.metric("💰 Current Balance", f"${current_balance:,.2f}", "Portal Truth")
+m2.metric("💸 Weekly Burn", f"${weekly_cost:,.2f}", f"{hours_per_week}h @ ${hourly_rate:.0f}")
+m3.metric("📅 Depletion Date", depletion_date.strftime("%d/%m/%Y"), f"{buffer_weeks:+.1f} wks buffer")
+m4.metric("🏁 End Result", f"${surplus_shortfall:,.2f}", "Surplus" if surplus_shortfall > 0 else "Shortfall", 
           delta_color="normal" if surplus_shortfall < 0 else "inverse")
 
-# ==============================================================================
-# CHARTS & VISUALS
-# ==============================================================================
+# 3. CHARTS
 st.subheader("📊 Financial Trajectory")
-
-tab1, tab2 = st.tabs(["Burn-Down Chart", "Budget Breakdown"])
+tab1, tab2 = st.tabs(["Burn-Down", "Budget Pie"])
 
 with tab1:
-    chart_weeks = int(weeks_remaining) + 4
-    dates = [today + timedelta(weeks=w) for w in range(chart_weeks + 1)]
+    chart_weeks = int(weeks_remaining) + 5
+    dates = [today + timedelta(weeks=w) for w in range(chart_weeks)]
     
-    projected_balance = [max(0, current_balance - (w * weekly_cost)) for w in range(chart_weeks + 1)]
+    # Logic for lines
+    y_actual = [max(0, current_balance - (w * weekly_cost)) for w in range(chart_weeks)]
     
-    if weeks_remaining > 0:
-        ideal_burn_rate = current_balance / weeks_remaining
-        ideal_balance = [max(0, current_balance - (w * ideal_burn_rate)) for w in range(chart_weeks + 1)]
-    else:
-        ideal_balance = [0] * (chart_weeks + 1)
-
-    df_chart = pd.DataFrame({
-        "Date": dates * 2,
-        "Balance": projected_balance + ideal_balance,
-        "Scenario": ["Your Trajectory"] * len(dates) + ["Break-Even Path"] * len(dates)
-    })
-
-    fig = px.line(df_chart, x="Date", y="Balance", color="Scenario",
-                  color_discrete_map={"Your Trajectory": status_colour, "Break-Even Path": "#808080"})
+    # Create DF
+    df_chart = pd.DataFrame({"Date": dates, "Balance": y_actual, "Type": "Your Trajectory"})
     
-    # Australian Date Format for Hover
-    fig.update_xaxes(tickformat="%d/%m/%Y")
+    fig = px.line(df_chart, x="Date", y="Balance", color="Type", 
+                  color_discrete_map={"Your Trajectory": color})
     
+    # Add Plan End Line
     fig.add_vline(x=datetime.datetime.combine(plan_end, datetime.time.min).timestamp() * 1000, 
                   line_dash="dot", line_color="white", annotation_text="Plan End")
     
-    fig.update_layout(height=350, hovermode="x unified", margin=dict(l=0, r=0, t=20, b=0))
+    fig.update_layout(height=350, hovermode="x unified", margin=dict(t=20, b=0, l=0, r=0))
+    fig.update_xaxes(tickformat="%d/%m/%Y")
     st.plotly_chart(fig, use_container_width=True)
 
 with tab2:
-    col_pie1, col_pie2 = st.columns([1, 2])
-    with col_pie1:
-        fig_pie = px.pie(
-            values=[spent_so_far, current_balance], 
-            names=["Already Used", "Remaining"],
-            color_discrete_sequence=["#333333", status_colour],
-            hole=0.4
-        )
-        fig_pie.update_layout(showlegend=False, margin=dict(l=0, r=0, t=10, b=10), height=250)
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        spent = max(0, total_budget - current_balance)
+        fig_pie = px.pie(values=[spent, current_balance], names=["Used", "Available"], 
+                         color_discrete_sequence=["#333333", color], hole=0.5)
+        fig_pie.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=250)
         st.plotly_chart(fig_pie, use_container_width=True)
-    
-    with col_pie2:
-        st.markdown("#### Budget Health")
-        st.progress(min(utilisation_pct / 100, 1.0))
-        st.caption(f"You have utilised **{utilisation_pct:.1f}%** of the original total budget.")
-        
-        if surplus_shortfall < 0:
-            st.error(f"⚠️ You are projected to be short by **${abs(surplus_shortfall):,.2f}**.")
-        else:
-            st.success(f"✅ You are projected to have a surplus of **${surplus_shortfall:,.2f}**.")
+    with c2:
+        st.markdown(f"#### Budget Health")
+        st.progress(min((spent/total_budget), 1.0))
+        st.caption(f"You have used **{(spent/total_budget)*100:.1f}%** of the original allocation.")
 
-# Footer
+# 4. AI REPORT
 st.markdown("---")
-st.markdown(
-    """
+col_ai_1, col_ai_2 = st.columns([3, 1])
+with col_ai_1:
+    st.subheader("🤖 Professional AI Assessment")
+with col_ai_2:
+    generate_btn = st.button("Generate Report ✨", type="primary", use_container_width=True)
+
+if generate_btn:
+    with st.spinner("Analyzing financials and generating strategy..."):
+        # Context payload
+        ctx = {
+            "status": status,
+            "weeks_remaining": weeks_remaining,
+            "balance": current_balance,
+            "weekly_cost": weekly_cost,
+            "surplus_shortfall": surplus_shortfall
+        }
+        report = get_ai_analysis(api_key, ctx)
+        
+        st.success("Report Generated Successfully")
+        st.markdown(f"""
+        <div style="background-color: #1e2129; padding: 20px; border-radius: 10px; border-left: 5px solid {color};">
+            {report}
+        </div>
+        """, unsafe_allow_html=True)
+elif not api_key:
+    st.info("💡 Add a Google Gemini API Key in the sidebar (or secrets) to enable AI reporting.")
+
+
+# FOOTER
+st.markdown("---")
+st.markdown("""
     <div style='text-align: center; color: #666; font-size: 0.8em;'>
-        © 2025 Xyston Pty Ltd | NDIS Viability Calculator<br>
-        Built by Chas Walker | <a href='https://www.xyston.com.au'>www.xyston.com.au</a><br><br>
-        <a href="https://www.buymeacoffee.com/h0m1ez187" target="_blank" style="text-decoration: none; color: #FFDD00; font-weight: bold;">
-            ☕ Buy Me a Coffee
-        </a>
+        © 2025 Xyston Pty Ltd | NDIS Viability Master<br>
+        Built by Chas Walker
     </div>
-    """, 
-    unsafe_allow_html=True
-)
+""", unsafe_allow_html=True)
