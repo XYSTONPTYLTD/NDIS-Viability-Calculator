@@ -8,7 +8,7 @@ import pytz
 # ==============================================================================
 # NDIS VIABILITY MASTER - AUSTRALIAN EDITION (2025)
 # Built by Chas Walker | Xyston.com.au
-# Features: DD/MM/YYYY, AU Spelling, Pure Dashboard + Donation Link
+# Features: Clean UI, Fixed Sidebar, Fancy Donation Button
 # ==============================================================================
 
 # 1. PAGE CONFIGURATION
@@ -36,12 +36,17 @@ RATES = {
 # SIDEBAR - INPUTS
 # ==============================================================================
 with st.sidebar:
-    # --- BRANDING / LOGO ---
-    # Replace this URL with your actual logo image URL if you have one
-    st.image("https://via.placeholder.com/300x100.png?text=XYSTON+PTY+LTD", use_container_width=True)
-    
-    st.markdown("### 🛡️ NDIS Master Calc")
-    st.caption("v2025.3 (AU Edition)")
+    # --- BRANDING (Clean Text - No Broken Images) ---
+    st.markdown(
+        """
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="font-size: 3em; margin: 0;">🛡️</h1>
+            <h2 style="font-weight: 800; margin: 0; color: #fafafa;">XYSTON</h2>
+            <p style="font-size: 0.8em; opacity: 0.7;">NDIS Master Calc v2025.3</p>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
     st.divider()
 
     st.header("1. Plan Settings")
