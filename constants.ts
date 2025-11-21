@@ -1,4 +1,3 @@
-
 export const DEFAULTS = {
   HOURLY_RATE: 100.14,
   TOTAL_BUDGET: 18000.00,
@@ -6,7 +5,6 @@ export const DEFAULTS = {
   HOURS_PER_WEEK: 1.5,
   TIME_INPUT_MODE: 'dates' as const,
   MANUAL_WEEKS: 40,
-  // Dates calculated dynamically in App.tsx
 };
 
 export const SUPPORT_OPTIONS = {
@@ -15,13 +13,10 @@ export const SUPPORT_OPTIONS = {
 };
 
 export const COLORS = {
-  PLATINUM: '#00cc66',
-  VIABLE: '#66ff66',
-  TIGHT: '#ffff00',
-  NON_VIABLE: '#ff4444',
-  
-  PIE_SPENT: '#ffaaaa',
-  PIE_AVAILABLE: '#aaffaa',
-  
-  BG_DARK: '#0f172a',
+  PLATINUM: '#10b981', // Emerald
+  VIABLE: '#22c55e',   // Green
+  TIGHT: '#eab308',    // Yellow
+  NON_VIABLE: '#ef4444', // Red
+  PIE_SPENT: '#334155',
+  PIE_AVAILABLE: '#10b981',
 };
