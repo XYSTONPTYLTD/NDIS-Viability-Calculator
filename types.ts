@@ -1,15 +1,14 @@
-
 export type SupportLevel = "Level 2: Coordination of Supports" | "Level 3: Specialist Support Coordination";
 
 export interface ClientData {
   supportLevel: SupportLevel;
   hourlyRate: number;
   timeInputMode: 'dates' | 'weeks';
-  planStartDate: string; // ISO YYYY-MM-DD
-  planEndDate: string;   // ISO YYYY-MM-DD
+  planStartDate: string;
+  planEndDate: string;
   manualWeeksRemaining: number;
   totalBudget: number;
-  currentBalance: number; // Portal Truth
+  currentBalance: number;
   hoursPerWeek: number;
 }
 
@@ -25,14 +24,11 @@ export interface InstantAdvice {
 }
 
 export interface AnalysisResult {
-  // Time
   daysRemaining: number;
   weeksRemaining: number;
   planStartDateFormatted: string;
   planEndDateFormatted: string;
   depletionDateFormatted: string;
-  
-  // Money
   spent: number;
   weeklyCost: number;
   runwayWeeks: number;
@@ -40,15 +36,10 @@ export interface AnalysisResult {
   surplusShortfall: number;
   bufferWeeks: number;
   breakEvenHours: number;
-  
-  // Status
   status: string;
-  statusColor: string;
-  statusBg: string; // Tailwind class
-  
-  // Advice
+  statusColor: string; // Hex code for charts
+  statusBg: string;    // Tailwind classes for banners
+  statusColorText: string; // Tailwind classes for text
   instantAdvice: InstantAdvice;
-
-  // Chart
   burnDownData: BurnDownPoint[];
 }
