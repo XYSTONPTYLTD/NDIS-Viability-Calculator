@@ -8,7 +8,7 @@ import pytz
 # ==============================================================================
 # NDIS VIABILITY MASTER - AUSTRALIAN EDITION (2025)
 # Built by Chas Walker | Xyston.com.au
-# Features: DD/MM/YYYY, AU Spelling, Logic-Based Reporting
+# Features: DD/MM/YYYY, AU Spelling, Pure Dashboard + Donation Link
 # ==============================================================================
 
 # 1. PAGE CONFIGURATION
@@ -36,6 +36,14 @@ RATES = {
 # SIDEBAR - INPUTS
 # ==============================================================================
 with st.sidebar:
+    # --- BRANDING / LOGO ---
+    # Replace this URL with your actual logo image URL if you have one
+    st.image("https://via.placeholder.com/300x100.png?text=XYSTON+PTY+LTD", use_container_width=True)
+    
+    st.markdown("### 🛡️ NDIS Master Calc")
+    st.caption("v2025.3 (AU Edition)")
+    st.divider()
+
     st.header("1. Plan Settings")
     
     # Rate Selector
@@ -83,6 +91,21 @@ with st.sidebar:
     
     st.header("4. Your Billing")
     hours_per_week = st.number_input("Planned Hours/Week", value=1.5, step=0.1)
+    
+    st.markdown("---")
+    
+    # --- DONATION BUTTON (FANCY) ---
+    st.markdown(
+        """
+        <div style="text-align: center;">
+            <p style="font-size: 0.9em; color: #666;">Find this tool useful?</p>
+            <a href="https://www.buymeacoffee.com/h0m1ez187" target="_blank">
+                <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 50px !important;width: 180px !important;" >
+            </a>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # ==============================================================================
 # LOGIC CORE
@@ -139,8 +162,7 @@ with col_head1:
     st.title("🛡️ NDIS Viability Master")
     st.caption(f"Fail-Safe Analysis • {support_type.split(':')[0]}")
 with col_head2:
-    st.markdown("**Xyston**")
-    st.caption("v2025.2 (AU)")
+    st.markdown("#### **Xyston**")
 
 st.divider()
 
@@ -228,72 +250,16 @@ with tab2:
         else:
             st.success(f"✅ You are projected to have a surplus of **${surplus_shortfall:,.2f}**.")
 
-# ==============================================================================
-# PROFESSIONAL ASSESSMENT REPORT (Logic-Based Generator)
-# ==============================================================================
-st.markdown("---")
-st.subheader("📋 Professional Viability Assessment")
-
-# Logic Engine for Report Generation
-break_even_hours = current_balance / weeks_remaining / hourly_rate if weeks_remaining > 0 else 0
-
-if surplus_shortfall < -500:
-    adv_style = "error"
-    adv_title = "CRITICAL ACTION REQUIRED"
-    adv_text = f"""
-    **Assessment Date:** {today.strftime('%d/%m/%Y')}
-    
-    The current billing schedule of **{hours_per_week} hours/week** is unsustainable. Based on the remaining funds of **${current_balance:,.2f}**, the funding will be fully depleted on **{depletion_date.strftime('%d/%m/%Y')}**, which is before the plan end date.
-    
-    **Recommended Actions:**
-    1.  **Immediate Reduction:** Reduce billable hours to **{break_even_hours:.2f} hours/week** to align with the plan end date.
-    2.  **Change of Circumstances:** If the participant's complex needs require the current level of support ({hours_per_week} hrs/week), you must gather evidence and lodge a review immediately.
-    3.  **Risk Management:** Do not bill for non-essential administrative tasks until funding is secured.
-    """
-
-elif surplus_shortfall > 2500:
-    adv_style = "info"
-    adv_title = "UNDERSERVICING DETECTED - OPPORTUNITY"
-    adv_text = f"""
-    **Assessment Date:** {today.strftime('%d/%m/%Y')}
-    
-    The participant has a significant surplus of **${surplus_shortfall:,.2f}**. At the current rate, this funding will be returned to the NDIA unspent.
-    
-    **Recommended Actions:**
-    1.  **Increase Support:** You can safely increase support to **{break_even_hours:.1f} hours/week**.
-    2.  **Capacity Building:** Utilise the surplus for additional provider meetings, care team coordination, or Allied Health reports.
-    3.  **Forward Planning:** Ensure all 'Coordination of Supports' funds are maximised to provide the best evidence for the next plan review.
-    """
-
-else:
-    adv_style = "success"
-    adv_title = "SUSTAINABLE & BALANCED"
-    adv_text = f"""
-    **Assessment Date:** {today.strftime('%d/%m/%Y')}
-    
-    The current billing cadence is perfectly aligned with the plan duration. You are tracking to finish the plan with a minor variance of **${surplus_shortfall:,.2f}**.
-    
-    **Recommended Actions:**
-    1.  **Maintain Schedule:** Continue billing at {hours_per_week} hours/week.
-    2.  **Monitor:** Check the portal balance monthly to ensure no unexpected invoices (e.g. Plan Manager fees) have altered the trajectory.
-    """
-
-# Display the Report
-with st.container():
-    if adv_style == "error":
-        st.error(f"**{adv_title}**\n\n{adv_text}")
-    elif adv_style == "info":
-        st.info(f"**{adv_title}**\n\n{adv_text}")
-    else:
-        st.success(f"**{adv_title}**\n\n{adv_text}")
-
 # Footer
 st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center; color: #666; font-size: 0.8em;'>
         © 2025 Xyston Pty Ltd | NDIS Viability Calculator<br>
-        Built by Chas Walker | <a href='https://www.xyston.com.au'>www.xyston.com.au</a>
+        Built by Chas Walker | <a href='https://www.xyston.com.au'>www.xyston.com.au</a><br><br>
+        <a href="https://www.buymeacoffee.com/h0m1ez187" target="_blank" style="text-decoration: none; color: #FFDD00; font-weight: bold;">
+            ☕ Buy Me a Coffee
+        </a>
     </div>
     """, 
     unsafe_allow_html=True
