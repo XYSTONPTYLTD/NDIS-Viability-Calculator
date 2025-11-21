@@ -27,6 +27,10 @@ st.markdown("""
     .metric-delta { font-size: 0.8rem; margin-top: 5px; }
     .stButton button { border-radius: 8px; font-weight: 600; transition: all 0.2s; }
     h1, h2, h3 { font-family: 'Inter', sans-serif; letter-spacing: -0.5px; }
+    
+    /* Quick Link Styling */
+    .quick-link a { display: block; padding: 6px 10px; margin: 3px 0; background: #1e2129; border: 1px solid #333; border-radius: 6px; color: #ccc; text-decoration: none; font-size: 0.8rem; transition: all 0.2s; }
+    .quick-link a:hover { background: #2d3342; border-color: #555; color: #fff; padding-left: 15px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -79,7 +83,7 @@ with st.sidebar:
         <div style="text-align: center; padding: 20px 0;">
             <h1 style="font-size: 3.5rem; margin:0; line-height: 1;">🛡️</h1>
             <h2 style="font-weight: 900; letter-spacing: 3px; margin:0; color: #fff;">XYSTON</h2>
-            <p style="font-size: 0.7rem; opacity: 0.6; font-family: monospace; letter-spacing: 1px;">NDIS MASTER v2025.8</p>
+            <p style="font-size: 0.7rem; opacity: 0.6; font-family: monospace; letter-spacing: 1px;">NDIS MASTER v2025.9</p>
         </div>
         <div style="height: 1px; background: linear-gradient(90deg, transparent, #333, transparent); margin: 0 0 20px 0;"></div>
     """, unsafe_allow_html=True)
@@ -114,6 +118,38 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown('<div style="text-align:center"><a href="https://www.buymeacoffee.com/h0m1ez187" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" style="width:160px;"></a></div>', unsafe_allow_html=True)
+
+    # --- NEW QUICK LINKS SECTION ---
+    st.markdown("---")
+    st.markdown("### ⚡ Quick Access")
+    
+    with st.expander("🛠️ Admin & HR", expanded=False):
+        st.markdown("""
+        <div class="quick-link">
+            <a href="https://secure.employmenthero.com/login" target="_blank">Employment Hero HR</a>
+            <a href="https://login.xero.com/" target="_blank">Xero Accounting</a>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with st.expander("🏦 Banking (Big 4)", expanded=False):
+        st.markdown("""
+        <div class="quick-link">
+            <a href="https://www.commbank.com.au/" target="_blank">Commonwealth (CBA)</a>
+            <a href="https://www.westpac.com.au/" target="_blank">Westpac</a>
+            <a href="https://www.anz.com.au/" target="_blank">ANZ</a>
+            <a href="https://www.nab.com.au/" target="_blank">NAB</a>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with st.expander("🏛️ NDIS Official", expanded=True):
+        st.markdown("""
+        <div class="quick-link">
+            <a href="https://proda.humanservices.gov.au/" target="_blank">🔐 PACE / PRODA Login</a>
+            <a href="https://www.ndiscommission.gov.au/" target="_blank">⚖️ NDIS Commission</a>
+            <a href="https://www.ndis.gov.au/news" target="_blank">📰 News & Reviews</a>
+        </div>
+        """, unsafe_allow_html=True)
+
 
 # ==============================================================================
 # LOGIC ENGINE
@@ -235,4 +271,4 @@ with c_ai2:
 
 # FOOTER
 st.markdown("---")
-st.caption("© 2025 Xyston Pty Ltd | Built by Chas Walker")
+st.caption("© 2025 Xyston Pty Ltd | Built by Chas")
