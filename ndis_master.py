@@ -3,198 +3,290 @@ import datetime
 from datetime import timedelta
 import plotly.express as px
 import pandas as pd
+import pytz # Required for accurate Perth time on Cloud servers
 
 # ==============================================================================
-# NDIS CALCULATOR - FAIL-SAFE EDITION (2025)
+# NDIS VIABILITY MASTER - PRODUCTION EDITION (2025)
 # Built by Chas Walker | Xyston.com.au
-# Focus: 100% Accuracy via "Portal Truth" Logic. No manual week counting.
+# Features: Timezone-aware, Mobile Responsive, Fail-Safe Logic
 # ==============================================================================
 
-st.set_page_config(page_title="NDIS Viability Master | Xyston", layout="wide", page_icon="🛡️")
+# 1. PAGE CONFIGURATION
+st.set_page_config(
+    page_title="NDIS Master | Xyston",
+    layout="wide",
+    page_icon="🛡️",
+    initial_sidebar_state="expanded"
+)
 
-# --- BRANDING & HEADER ---
-col_brand, col_logo = st.columns([4, 1])
-with col_brand:
-    st.title("🛡️ NDIS Viability Master (Fail-Safe)")
-    st.markdown("**The Zero-Error Tool for Independent Coordinators**")
-    st.caption("Enter the Plan End Date and Portal Balance. We do the rest.")
+# 2. TIMEZONE SETUP (Critical for Cloud Deployment)
+# Streamlit Cloud servers run on UTC. We must force Perth time.
+try:
+    perth_tz = pytz.timezone('Australia/Perth')
+    today = datetime.datetime.now(perth_tz).date()
+except:
+    # Fallback if pytz fails for any reason
+    today = datetime.date.today()
 
-with st.expander("⚠️ Disclaimer & Authorship"):
-    st.markdown("""**Built by Chas Walker (Xyston.com.au).** For planning purposes only. Use at your own risk based on your own inputs.""")
-
-st.markdown("---")
-
-# --- 2025 RATE DATA (Source of Truth) ---
+# 3. RATES DATABASE (2025)
 RATES = {
     "Level 2: Coordination of Supports": 100.14,
     "Level 3: Specialist Support Coordination": 190.41
 }
 
 # ==============================================================================
-# 1. THE "FAIL-SAFE" SIDEBAR INPUTS
+# SIDEBAR - INPUTS
 # ==============================================================================
-st.sidebar.header("1. The Essentials")
+with st.sidebar:
+    st.header("1. Plan Settings")
+    
+    # Rate Selector
+    support_type = st.selectbox("Support Level", list(RATES.keys()))
+    default_rate = RATES[support_type]
+    hourly_rate = st.number_input("Hourly Rate ($)", value=default_rate, step=0.01)
 
-# A. SELECT RATE (Prevents wrong billing math)
-support_type = st.sidebar.selectbox("Support Level", list(RATES.keys()))
-default_rate = RATES[support_type]
-hourly_rate = st.sidebar.number_input("Your Hourly Rate ($)", value=default_rate, step=0.01)
+    st.divider()
+    
+    st.header("2. Critical Dates")
+    # Date Inputs
+    # Default Plan Start = 3 months ago, Plan End = 9 months from now
+    plan_start = st.date_input("Plan Start Date", value=today - timedelta(weeks=12))
+    plan_end = st.date_input("Plan End Date", value=today + timedelta(weeks=40))
 
-# B. PLAN DATES (Prevents "Weeks Remaining" math errors)
-# We ask for dates because they are written on the plan. We calculate the weeks.
-today = datetime.date.today()
-st.sidebar.subheader("2. Critical Dates")
-plan_start = st.sidebar.date_input("Plan Start Date", value=today - timedelta(weeks=12))
-plan_end = st.sidebar.date_input("Plan End Date", value=today + timedelta(weeks=40))
+    # Date Validation
+    if plan_end <= today:
+        st.error("⚠️ Plan End Date must be in the future.")
+        st.stop()
+        
+    days_remaining = (plan_end - today).days
+    weeks_remaining = days_remaining / 7
+    st.caption(f"📅 Today is {today.strftime('%d %b')}. **{weeks_remaining:.1f} weeks** remaining.")
 
-# FAIL-SAFE CALCULATION: Weeks Remaining
-if plan_end <= today:
-    st.error("Error: Plan End Date must be in the future.")
-    st.stop()
+    st.divider()
 
-days_remaining = (plan_end - today).days
-weeks_remaining = days_remaining / 7
+    st.header("3. Portal Financials")
+    total_budget = st.number_input("Total Original Budget ($)", value=18000.0, step=100.0)
+    current_balance = st.number_input(
+        "Current Portal Balance ($)", 
+        value=14500.0, 
+        step=50.0, 
+        help="Enter the EXACT amount currently available in the PRODA portal."
+    )
 
-st.sidebar.info(f"📅 **{days_remaining} days** ({weeks_remaining:.1f} weeks) remaining.")
-
-# C. FINANCIALS (The "Portal Truth")
-st.sidebar.subheader("3. Financials (Portal Truth)")
-total_budget = st.sidebar.number_input("Total Original Budget ($)", value=18000.0, step=100.0, help="The total amount originally allocated.")
-current_balance = st.sidebar.number_input("Current Portal Balance ($)", value=14500.0, step=50.0, help="The EXACT amount showing in the NDIS portal today.")
-
-# D. YOUR PLAN
-st.sidebar.subheader("4. Your Action")
-hours_per_week = st.sidebar.number_input("Planned Hours Per Week", value=1.5, step=0.1)
+    st.divider()
+    
+    st.header("4. Your Billing")
+    hours_per_week = st.number_input("Planned Hours/Week", value=1.5, step=0.1)
 
 # ==============================================================================
-# 2. THE CALCULATIONS (Hidden Complexity)
+# LOGIC CORE
 # ==============================================================================
 
-# 1. Burn Rate
+# 1. Costs
 weekly_cost = hours_per_week * hourly_rate
 
-# 2. Runway (The "Line in the Sand" Calculation)
-# We ignore past history. We only care about: Can [Current Balance] survive [Weeks Remaining]?
+# 2. Runway Calculation (Fail-Safe)
 if weekly_cost > 0:
     runway_weeks = current_balance / weekly_cost
 else:
-    runway_weeks = 999
+    runway_weeks = 999 # Infinite runway if not spending
 
 depletion_date = today + timedelta(days=int(runway_weeks * 7))
 
-# 3. The Gap
+# 3. Gap Analysis
 required_to_finish = weekly_cost * weeks_remaining
 surplus_shortfall = current_balance - required_to_finish
 
-# 4. Status Logic (Traffic Light)
-# Buffer: How many extra weeks of funding do we have vs time left?
-buffer_weeks = runway_weeks - weeks_remaining
+# 4. Status Determination
+buffer_ratio = runway_weeks / weeks_remaining if weeks_remaining > 0 else 0
 
-if runway_weeks >= weeks_remaining * 1.2:
-    status = "🟢 PLATINUM CLIENT (Safe Surplus)"
-    color = "#00cc66"
-elif runway_weeks >= weeks_remaining:
-    status = "🟢 VIABLE (On Track)"
-    color = "#66ff66"
-elif runway_weeks >= weeks_remaining - 2:
-    status = "🟡 TIGHT (Monitor Closely)"
-    color = "#ffff00"
+if buffer_ratio >= 1.2:
+    status_title = "🟢 PLATINUM CLIENT"
+    status_desc = "Safe Surplus. Excellent viability."
+    status_color = "#00cc66" # Green
+    bg_color = "rgba(0, 204, 102, 0.1)"
+elif buffer_ratio >= 1.0:
+    status_title = "🟢 VIABLE (ON TRACK)"
+    status_desc = "Fully funded for the remaining time."
+    status_color = "#66ff66" # Light Green
+    bg_color = "rgba(102, 255, 102, 0.1)"
+elif buffer_ratio >= 0.85:
+    status_title = "🟡 MARGINAL (MONITOR)"
+    status_desc = "Tight budget. Watch billing closely."
+    status_color = "#ffd700" # Gold
+    bg_color = "rgba(255, 215, 0, 0.1)"
 else:
-    status = "🔴 NON-VIABLE (Immediate Action Req)"
-    color = "#ff4444"
+    status_title = "🔴 HIGH RISK / NON-VIABLE"
+    status_desc = "Insufficient funds. Immediate action required."
+    status_color = "#ff4444" # Red
+    bg_color = "rgba(255, 68, 68, 0.1)"
 
 # ==============================================================================
-# 3. THE DASHBOARD
+# MAIN DASHBOARD UI
 # ==============================================================================
 
-# BIG VISUAL STATUS
+# Header
+col_head1, col_head2 = st.columns([4, 1])
+with col_head1:
+    st.title("🛡️ NDIS Viability Master")
+    st.caption(f"Fail-Safe Analysis • {support_type.split(':')[0]}")
+with col_head2:
+    # Display Author info in a clean way
+    st.markdown("**Xyston**")
+    st.caption("v2025.1")
+
+st.divider()
+
+# Status Banner (CSS Injected for nice styling)
 st.markdown(f"""
-    <div style="border: 2px solid {color}; border-radius: 10px; padding: 10px; background-color: {color}20; text-align: center;">
-        <h1 style="color: {color}; margin: 0;">{status}</h1>
-        <p style="font-size: 1.2em; margin-top: 5px;">
-            You have <b>{runway_weeks:.1f} weeks</b> of funding for <b>{weeks_remaining:.1f} weeks</b> of time.
-        </p>
+    <div style="
+        border: 2px solid {status_color}; 
+        border-radius: 12px; 
+        padding: 20px; 
+        background-color: {bg_color}; 
+        text-align: center; 
+        margin-bottom: 25px;">
+        <h2 style="color: {status_color}; margin: 0; font-weight: 800;">{status_title}</h2>
+        <p style="margin-top: 8px; font-size: 1.1em; opacity: 0.9;">{status_desc}</p>
     </div>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-st.markdown("### 💼 Financial Snapshot")
-
+# Metrics Row
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("Funds Available Now", f"${current_balance:,.2f}", "Source: Portal")
-m2.metric("Your Weekly Bill", f"${weekly_cost:,.2f}", f"{hours_per_week} hrs @ ${hourly_rate:.0f}")
-m3.metric("Depletion Date", depletion_date.strftime("%d %b %Y"), f"Plan ends {plan_end.strftime('%d %b')}")
-m4.metric("Outcome at Plan End", f"${surplus_shortfall:,.2f}", "Surplus" if surplus_shortfall > 0 else "Shortfall", 
+m1.metric("Current Balance", f"${current_balance:,.2f}", help="From Portal")
+m2.metric("Weekly Cost", f"${weekly_cost:,.2f}", f"{hours_per_week} hrs/wk")
+m3.metric("Depletion Date", depletion_date.strftime("%d %b %Y"), 
+          delta=f"{abs((depletion_date - plan_end).days)} days {'early' if depletion_date < plan_end else 'buffer'}",
+          delta_color="inverse" if depletion_date < plan_end else "normal")
+m4.metric("End Result", f"${surplus_shortfall:,.2f}", 
+          "Surplus" if surplus_shortfall > 0 else "Shortfall",
           delta_color="normal" if surplus_shortfall < 0 else "inverse")
 
 # ==============================================================================
-# 4. VISUAL PROOF (Burn Down)
+# CHARTS & VISUALS
 # ==============================================================================
+st.subheader("📊 Financial Trajectory")
 
-c1, c2 = st.columns([1, 2])
+tab1, tab2 = st.tabs(["Burn-Down Chart", "Budget Breakdown"])
 
-with c1:
-    st.markdown("#### 📊 Budget Usage")
-    # Simple Pie: What is gone vs What is left
-    spent = total_budget - current_balance
-    fig_pie = px.pie(values=[spent, current_balance], names=["Already Spent", "Available Now"], 
-                     color_discrete_sequence=["#ffaaaa", "#aaffaa"], hole=0.4)
-    fig_pie.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=250)
-    fig_pie.add_annotation(text=f"${current_balance/1000:.1f}k<br>Left", showarrow=False, font_size=15)
-    st.plotly_chart(fig_pie, use_container_width=True)
+with tab1:
+    # 1. Burn Down Data Construction
+    # We create points for every week from Now until Plan End + 4 weeks (for buffer visibility)
+    chart_weeks = int(weeks_remaining) + 4
+    dates = [today + timedelta(weeks=w) for w in range(chart_weeks + 1)]
+    
+    # Projected Balance
+    projected_balance = [max(0, current_balance - (w * weekly_cost)) for w in range(chart_weeks + 1)]
+    
+    # Ideal Balance (Target)
+    if weeks_remaining > 0:
+        ideal_burn_rate = current_balance / weeks_remaining
+        ideal_balance = [max(0, current_balance - (w * ideal_burn_rate)) for w in range(chart_weeks + 1)]
+    else:
+        ideal_balance = [0] * (chart_weeks + 1)
 
-with c2:
-    st.markdown("#### 📉 The Trajectory")
-    # Data for chart
-    x_weeks = list(range(int(weeks_remaining) + 4)) # Go a bit past end date
-    dates = [today + timedelta(weeks=w) for w in x_weeks]
+    df_chart = pd.DataFrame({
+        "Date": dates * 2,
+        "Balance": projected_balance + ideal_balance,
+        "Scenario": ["Your Trajectory"] * len(dates) + ["Break-Even Path"] * len(dates)
+    })
+
+    # Plotly Chart
+    fig = px.line(df_chart, x="Date", y="Balance", color="Scenario",
+                  color_discrete_map={"Your Trajectory": status_color, "Break-Even Path": "#808080"})
     
-    # Projected Balance Line
-    y_balance = [max(0, current_balance - (w * weekly_cost)) for w in x_weeks]
-    
-    df_chart = pd.DataFrame({"Date": dates, "Balance": y_balance})
-    
-    fig = px.line(df_chart, x="Date", y="Balance", title="Projected Funding Depletion")
-    fig.update_traces(line_color=color, line_width=3)
-    
-    # Add Plan End Vertical Line
+    # Add Plan End Line
     fig.add_vline(x=datetime.datetime.combine(plan_end, datetime.time.min).timestamp() * 1000, 
-                  line_dash="dot", annotation_text="Plan End")
+                  line_dash="dot", line_color="white", annotation_text="Plan End")
     
-    fig.update_layout(height=300, margin=dict(l=0, r=0, t=30, b=0))
+    fig.update_layout(height=350, hovermode="x unified", margin=dict(l=0, r=0, t=20, b=0))
     st.plotly_chart(fig, use_container_width=True)
 
-# ==============================================================================
-# 5. AI SECOND OPINION (Plain English)
-# ==============================================================================
-
-st.markdown("---")
-st.subheader("🤖 The AI Second Opinion")
-
-# Fail-Safe Advice Logic
-if surplus_shortfall < -500:
-    advice_header = "⚠️ DANGER: You are burning too hot."
-    advice_body = f"""
-    At **{hours_per_week} hours/week**, this participant will run out of money on **{depletion_date.strftime('%d %B')}**—which is **{abs(buffer_weeks):.1f} weeks EARLY**.
+with tab2:
+    col_pie1, col_pie2 = st.columns([1, 2])
+    with col_pie1:
+        # Pie Chart
+        spent = max(0, total_budget - current_balance)
+        fig_pie = px.pie(
+            values=[spent, current_balance], 
+            names=["Already Used", "Remaining"],
+            color_discrete_sequence=["#333333", status_color],
+            hole=0.4
+        )
+        fig_pie.update_layout(showlegend=False, margin=dict(l=0, r=0, t=10, b=10), height=250)
+        st.plotly_chart(fig_pie, use_container_width=True)
     
-    **Corrective Action:**
-    1. You must reduce billing to **{(current_balance / weeks_remaining / hourly_rate):.2f} hours/week** to break even.
-    2. Or, if the client needs this level of support, you must apply for a review immediately.
+    with col_pie2:
+        st.markdown("#### Budget Health")
+        utilization = (spent / total_budget) * 100 if total_budget > 0 else 0
+        st.progress(min(utilization / 100, 1.0))
+        st.caption(f"You have used **{utilization:.1f}%** of the original total budget.")
+        
+        if surplus_shortfall < 0:
+            st.error(f"⚠️ You are projected to be short by **${abs(surplus_shortfall):,.2f}**.")
+        else:
+            st.success(f"✅ You are projected to have a surplus of **${surplus_shortfall:,.2f}**.")
+
+# ==============================================================================
+# AI RECOMMENDATION ENGINE
+# ==============================================================================
+st.markdown("---")
+st.subheader("🤖 AI Second Opinion")
+
+# Recommendation Logic
+break_even_hours = current_balance / weeks_remaining / hourly_rate if weeks_remaining > 0 else 0
+
+if surplus_shortfall < -500:
+    adv_icon = "🛑"
+    adv_title = "CRITICAL ACTION REQUIRED"
+    adv_msg = f"""
+    You are burning funding too fast. The plan will run dry on **{depletion_date.strftime('%d %b %Y')}**.
+    
+    **You must do one of the following:**
+    1. **Reduce Billable Hours:** Drop to **{break_even_hours:.2f} hrs/week** immediately.
+    2. **Review:** If the participant needs {hours_per_week} hrs/week, lodge a Review of Reviewable Decisions (s48) or CoC immediately.
     """
-elif surplus_shortfall > 2000:
-    advice_header = "💎 OPPORTUNITY: You are under-servicing."
-    advice_body = f"""
-    You have a large surplus of **${surplus_shortfall:,.2f}**. If you continue at this rate, you will return money to the NDIA.
+    adv_style = "error"
+
+elif surplus_shortfall > 2500:
+    adv_icon = "💎"
+    adv_title = "UNDERSERVICING DETECTED"
+    adv_msg = f"""
+    You have a significant surplus. You are currently leaving **${surplus_shortfall:,.2f}** on the table.
     
     **Strategy:**
-    * You can safely increase support to **{(current_balance / weeks_remaining / hourly_rate):.1f} hours/week**.
-    * Use this funding for extra reports, provider meetings, or capacity building.
+    * You can safely increase support to **{break_even_hours:.1f} hrs/week**.
+    * Consider using funds for additional provider meetings, reporting, or allied health coordination.
     """
+    adv_style = "info"
+
 else:
-    advice_header = "✅ ON TRACK: Perfect Balance."
-    advice_body = f"""
-    Your billing rate aligns perfectly with the remaining plan duration. You will finish the plan with approximately **${surplus_shortfall:,.2f}** remaining.
+    adv_icon = "✅"
+    adv_title = "PERFECTLY BALANCED"
+    adv_msg = f"""
+    Your current billing cadence is sustainable. You are tracking to finish the plan with a minor variance of **${surplus_shortfall:,.2f}**.
+    
+    **Strategy:** Maintain current schedule. Monitor monthly.
     """
+    adv_style = "success"
 
-st.info(f"**{advice_header}**\n\n{advice_body}")
+# Display Advice
+with st.container():
+    if adv_style == "error":
+        st.error(f"**{adv_icon} {adv_title}**\n\n{adv_msg}")
+    elif adv_style == "info":
+        st.info(f"**{adv_icon} {adv_title}**\n\n{adv_msg}")
+    else:
+        st.success(f"**{adv_icon} {adv_title}**\n\n{adv_msg}")
 
-st.caption("© 2025 Xyston | Fail-Safe NDIS Calculator")
+# Footer
+st.markdown("---")
+st.markdown(
+    """
+    <div style='text-align: center; color: #666; font-size: 0.8em;'>
+        © 2025 Xyston Pty Ltd | NDIS Viability Calculator Master Edition<br>
+        Built by Chas Walker | <a href='https://www.xyston.com.au'>www.xyston.com.au</a>
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
