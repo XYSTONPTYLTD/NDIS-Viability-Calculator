@@ -4,7 +4,6 @@ from datetime import timedelta
 import plotly.express as px
 import pandas as pd
 import pytz
-import os
 import google.generativeai as genai
 
 # ==============================================================================
@@ -17,49 +16,51 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for that "Pro" look
+# Custom CSS for Pro UI
 st.markdown("""
 <style>
-    .reportview-container .main .block-container{ padding-top: 2rem; }
-    .stMetric { background-color: #0e1117; padding: 10px; border-radius: 5px; border: 1px solid #262730; }
-    .status-banner { padding: 20px; border-radius: 10px; text-align: center; margin-bottom: 20px; border: 2px solid; }
-    h1, h2, h3 { font-family: 'Inter', sans-serif; }
-    .stButton button { width: 100%; border-radius: 8px; font-weight: bold; }
+    .stApp { background-color: #0e1117; }
+    .status-banner { padding: 25px; border-radius: 12px; text-align: center; margin-bottom: 25px; border: 1px solid; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+    .metric-card { background-color: #1e2129; padding: 15px; border-radius: 10px; border: 1px solid #2d3342; text-align: center; }
+    .metric-label { font-size: 0.8rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+    .metric-value { font-size: 1.8rem; font-weight: 700; color: #ffffff; font-family: monospace; }
+    .metric-delta { font-size: 0.8rem; margin-top: 5px; }
+    .stButton button { border-radius: 8px; font-weight: 600; transition: all 0.2s; }
+    h1, h2, h3 { font-family: 'Inter', sans-serif; letter-spacing: -0.5px; }
+    .prompt-box { background-color: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155; font-family: monospace; white-space: pre-wrap; font-size: 0.85em; color: #a5b4fc; }
 </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
 # UTILITIES
 # ==============================================================================
-def get_ai_analysis(api_key, context_data):
+def get_ai_analysis(api_key, ctx):
     """Fetches a professional report from Google Gemini."""
-    if not api_key:
-        return "⚠️ API Key missing. Please add it to the sidebar."
-    
+    if not api_key: return "⚠️ API Key missing."
     try:
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-2.0-flash')
-        
         prompt = f"""
         Act as a Senior NDIS Support Coordinator (Australia). 
-        Write a concise 'Viability & Strategy Note' (max 200 words) for a participant file based on this live data:
+        Write a formal 'File Note: Viability Assessment' for a participant.
         
-        - **Status:** {context_data['status']}
-        - **Weeks Remaining in Plan:** {context_data['weeks_remaining']:.1f}
-        - **Current Funds:** ${context_data['balance']:,.2f}
-        - **Burn Rate:** ${context_data['weekly_cost']:,.2f}/week
-        - **Projected Outcome:** ${context_data['surplus_shortfall']:,.2f} ({'Surplus' if context_data['surplus_shortfall'] > 0 else 'Shortfall'})
+        DATA:
+        - Status: {ctx['status']}
+        - Funds: ${ctx['balance']:,.2f} (Portal Truth)
+        - Burn: ${ctx['weekly_cost']:,.2f}/wk ({ctx['hours']:.1f} hrs)
+        - Plan Ends: {ctx['end_date']} ({ctx['weeks_remaining']:.1f} wks left)
+        - Outcome: ${ctx['surplus_shortfall']:,.2f} ({'Surplus' if ctx['surplus_shortfall']>0 else 'Shortfall'})
         
-        Provide 3 clear, actionable strategic dot points for the coordinator to manage this specific financial trajectory. 
-        Tone: Professional, risk-aware, Australian English.
+        OUTPUT FORMAT:
+        Start with "Re: Financial Viability Assessment".
+        Provide an Executive Summary, Risk Analysis, and 3 Imperative Recommendations.
+        Tone: Professional, protective, Australian English.
         """
-        
         response = model.generate_content(prompt)
         return response.text
-    except Exception as e:
-        return f"⚠️ Error generating report: {str(e)}"
+    except Exception as e: return f"Error: {str(e)}"
 
-# Timezone Setup
+# Timezone
 try:
     perth_tz = pytz.timezone('Australia/Perth')
     today = datetime.datetime.now(perth_tz).date()
@@ -76,59 +77,45 @@ RATES = {
 # SIDEBAR
 # ==============================================================================
 with st.sidebar:
-    # BRANDING
     st.markdown("""
-        <div style="text-align: center; margin-bottom: 10px;">
-            <h1 style="font-size: 3rem; margin:0;">🛡️</h1>
-            <h2 style="font-weight: 900; letter-spacing: 2px; margin:0;">XYSTON</h2>
-            <p style="font-size: 0.8rem; opacity: 0.7; font-family: monospace;">NDIS Master v2025.5</p>
+        <div style="text-align: center; padding: 20px 0;">
+            <h1 style="font-size: 3.5rem; margin:0; line-height: 1;">🛡️</h1>
+            <h2 style="font-weight: 900; letter-spacing: 3px; margin:0; color: #fff;">XYSTON</h2>
+            <p style="font-size: 0.7rem; opacity: 0.6; font-family: monospace; letter-spacing: 1px;">NDIS MASTER v2025.7</p>
         </div>
-        <hr style="margin: 10px 0;">
+        <div style="height: 1px; background: linear-gradient(90deg, transparent, #333, transparent); margin: 0 0 20px 0;"></div>
     """, unsafe_allow_html=True)
 
-    # API KEY HANDLING
+    # API Key
     api_key = st.secrets.get("GEMINI_API_KEY", None)
     if not api_key:
         with st.expander("🔐 AI Settings (Optional)"):
-            api_key = st.text_input("Enter Google API Key", type="password")
+            api_key = st.text_input("Google API Key", type="password")
 
-    # INPUTS
-    st.markdown("#### 1. Setup")
-    support_type = st.selectbox("Support Level", list(RATES.keys()))
-    hourly_rate = st.number_input("Hourly Rate ($)", value=RATES[support_type], step=0.01)
+    # Inputs
+    st.caption("1. SETUP")
+    support_type = st.selectbox("Support Level", list(RATES.keys()), label_visibility="collapsed")
+    hourly_rate = st.number_input("Rate ($)", value=RATES[support_type], step=0.01)
 
-    st.markdown("#### 2. Time")
-    mode = st.radio("Input Mode", ["Dates", "Weeks"], horizontal=True, label_visibility="collapsed")
-    
+    st.caption("2. TIMELINE")
+    mode = st.radio("Mode", ["Dates", "Weeks"], horizontal=True, label_visibility="collapsed")
     if mode == "Dates":
-        plan_end = st.date_input("Plan End Date", value=today + timedelta(weeks=40), format="DD/MM/YYYY")
-        if plan_end <= today:
-            st.error("End date must be future.")
-            st.stop()
-        days_remaining = (plan_end - today).days
-        weeks_remaining = days_remaining / 7
+        plan_end = st.date_input("Plan End", value=today + timedelta(weeks=40), format="DD/MM/YYYY")
+        if plan_end <= today: st.stop()
+        weeks_remaining = (plan_end - today).days / 7
     else:
-        weeks_remaining = st.number_input("Weeks Remaining", value=40.0, step=0.5)
-        days_remaining = int(weeks_remaining * 7)
-        plan_end = today + timedelta(days=days_remaining)
+        weeks_remaining = st.number_input("Weeks Left", value=40.0, step=0.5)
+        plan_end = today + timedelta(days=int(weeks_remaining*7))
+    
+    st.caption("3. FINANCIALS (PORTAL TRUTH)")
+    total_budget = st.number_input("Original ($)", value=18000.0, step=100.0)
+    current_balance = st.number_input("Current ($)", value=14500.0, step=50.0)
 
-    st.caption(f"📅 **{weeks_remaining:.1f} weeks** remaining")
-
-    st.markdown("#### 3. Money (Portal Truth)")
-    total_budget = st.number_input("Original Budget ($)", value=18000.0, step=100.0)
-    current_balance = st.number_input("Current Portal Balance ($)", value=14500.0, step=50.0)
-
-    st.markdown("#### 4. Billing")
-    hours_per_week = st.number_input("Planned Hours/Week", value=1.5, step=0.1)
+    st.caption("4. BILLING")
+    hours_per_week = st.number_input("Hours/Week", value=1.5, step=0.1)
 
     st.markdown("---")
-    st.markdown("""
-        <div style="text-align: center;">
-            <a href="https://www.buymeacoffee.com/h0m1ez187" target="_blank">
-                <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 40px !important;width: 150px !important;" >
-            </a>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center"><a href="https://www.buymeacoffee.com/h0m1ez187" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" style="width:160px;"></a></div>', unsafe_allow_html=True)
 
 # ==============================================================================
 # LOGIC ENGINE
@@ -136,130 +123,152 @@ with st.sidebar:
 weekly_cost = hours_per_week * hourly_rate
 runway_weeks = current_balance / weekly_cost if weekly_cost > 0 else 999
 depletion_date = today + timedelta(days=int(runway_weeks * 7))
-
-required_to_finish = weekly_cost * weeks_remaining
-surplus_shortfall = current_balance - required_to_finish
-buffer_weeks = runway_weeks - weeks_remaining
+required = weekly_cost * weeks_remaining
+surplus = current_balance - required
+buffer = runway_weeks - weeks_remaining
+break_even = current_balance / weeks_remaining / hourly_rate if weeks_remaining > 0 else 0
 
 # Status Logic
 if runway_weeks >= weeks_remaining * 1.2:
-    status = "PLATINUM CLIENT"
-    color = "#10b981" # Emerald
-    bg = "rgba(16, 185, 129, 0.1)"
+    status, color, bg, icon = "PLATINUM CLIENT", "#10b981", "rgba(16, 185, 129, 0.1)", "💎"
     msg = "Safe Surplus. Excellent viability."
 elif runway_weeks >= weeks_remaining:
-    status = "VIABLE (ON TRACK)"
-    color = "#22c55e" # Green
-    bg = "rgba(34, 197, 94, 0.1)"
+    status, color, bg, icon = "VIABLE (ON TRACK)", "#22c55e", "rgba(34, 197, 94, 0.1)", "✅"
     msg = "Fully funded for remaining time."
 elif runway_weeks >= max(0, weeks_remaining - 2):
-    status = "TIGHT (MONITOR)"
-    color = "#eab308" # Yellow
-    bg = "rgba(234, 179, 8, 0.1)"
-    msg = "Tight budget. Watch billing closely."
+    status, color, bg, icon = "TIGHT (MONITOR)", "#eab308", "rgba(234, 179, 8, 0.1)", "⚠️"
+    msg = "Tight budget. Watch closely."
 else:
-    status = "NON-VIABLE"
-    color = "#ef4444" # Red
-    bg = "rgba(239, 68, 68, 0.1)"
+    status, color, bg, icon = "NON-VIABLE", "#ef4444", "rgba(239, 68, 68, 0.1)", "🛑"
     msg = "Insufficient funds. Action required."
 
 # ==============================================================================
-# MAIN DASHBOARD
+# MAIN UI
 # ==============================================================================
 
-# 1. STATUS BANNER
+# 1. STATUS HEADER
 st.markdown(f"""
     <div class="status-banner" style="border-color: {color}; background-color: {bg};">
-        <h1 style="color: {color}; margin:0;">{status}</h1>
-        <p style="margin: 5px 0 0 0; opacity: 0.8;">{msg}</p>
-        <div style="margin-top: 10px; font-weight: bold; color: {color};">
-            Runway: {runway_weeks:.1f} wks <span style="color: #666;">vs</span> Plan: {weeks_remaining:.1f} wks
+        <h1 style="color: {color}; margin:0; font-size: 2.5rem;">{icon} {status}</h1>
+        <p style="color: #ccc; margin-top: 5px;">{msg}</p>
+        <div style="margin-top: 15px; font-family: monospace; color: {color};">
+            RUNWAY: {runway_weeks:.1f} WKS <span style="color: #555;">|</span> PLAN: {weeks_remaining:.1f} WKS
         </div>
     </div>
 """, unsafe_allow_html=True)
 
-# 2. METRICS
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("💰 Current Balance", f"${current_balance:,.2f}", "Portal Truth")
-m2.metric("💸 Weekly Burn", f"${weekly_cost:,.2f}", f"{hours_per_week}h @ ${hourly_rate:.0f}")
-m3.metric("📅 Depletion Date", depletion_date.strftime("%d/%m/%Y"), f"{buffer_weeks:+.1f} wks buffer")
-m4.metric("🏁 End Result", f"${surplus_shortfall:,.2f}", "Surplus" if surplus_shortfall > 0 else "Shortfall", 
-          delta_color="normal" if surplus_shortfall < 0 else "inverse")
+# 2. METRIC CARDS
+c1, c2, c3, c4 = st.columns(4)
+def card(col, label, value, delta, color="#fff"):
+    col.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">{label}</div>
+            <div class="metric-value" style="color: {color};">{value}</div>
+            <div class="metric-delta">{delta}</div>
+        </div>
+    """, unsafe_allow_html=True)
 
-# 3. CHARTS
-st.subheader("📊 Financial Trajectory")
-tab1, tab2 = st.tabs(["Burn-Down", "Budget Pie"])
+card(c1, "Portal Balance", f"${current_balance:,.0f}", "Real-time Funds", "#fff")
+card(c2, "Weekly Burn", f"${weekly_cost:.0f}", f"{hours_per_week}h @ ${hourly_rate:.0f}", "#fff")
+card(c3, "Depletion Date", depletion_date.strftime('%d/%m/%y'), f"{buffer:+.1f} wks buffer", color)
+card(c4, "End Outcome", f"${surplus:,.0f}", "Surplus" if surplus > 0 else "Shortfall", color)
 
-with tab1:
-    chart_weeks = int(weeks_remaining) + 5
-    dates = [today + timedelta(weeks=w) for w in range(chart_weeks)]
+# 3. THE SANDBOX (Scenario Lab)
+st.markdown("### 🧪 Scenario Lab")
+with st.expander("Test new billing rates without changing inputs...", expanded=False):
+    sim_hours = st.slider("Simulate Hours/Week", 0.0, 5.0, hours_per_week, 0.1)
+    sim_cost = sim_hours * hourly_rate
+    sim_runway = current_balance / sim_cost if sim_cost > 0 else 999
+    sim_surplus = current_balance - (sim_cost * weeks_remaining)
     
-    # Logic for lines
-    y_actual = [max(0, current_balance - (w * weekly_cost)) for w in range(chart_weeks)]
-    
-    # Create DF
-    df_chart = pd.DataFrame({"Date": dates, "Balance": y_actual, "Type": "Your Trajectory"})
-    
-    fig = px.line(df_chart, x="Date", y="Balance", color="Type", 
-                  color_discrete_map={"Your Trajectory": color})
-    
-    # Add Plan End Line
-    fig.add_vline(x=datetime.datetime.combine(plan_end, datetime.time.min).timestamp() * 1000, 
-                  line_dash="dot", line_color="white", annotation_text="Plan End")
-    
-    fig.update_layout(height=350, hovermode="x unified", margin=dict(t=20, b=0, l=0, r=0))
-    fig.update_xaxes(tickformat="%d/%m/%Y")
-    st.plotly_chart(fig, use_container_width=True)
+    s1, s2, s3 = st.columns(3)
+    s1.metric("New Weekly Cost", f"${sim_cost:.2f}", f"{sim_hours} hrs")
+    s2.metric("New Runway", f"{sim_runway:.1f} wks", f"{sim_runway - weeks_remaining:+.1f} vs Plan")
+    s3.metric("New Outcome", f"${sim_surplus:,.0f}", delta_color="normal" if sim_surplus < 0 else "inverse")
 
-with tab2:
-    c1, c2 = st.columns([1, 2])
-    with c1:
-        spent = max(0, total_budget - current_balance)
-        fig_pie = px.pie(values=[spent, current_balance], names=["Used", "Available"], 
-                         color_discrete_sequence=["#333333", color], hole=0.5)
-        fig_pie.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=250)
-        st.plotly_chart(fig_pie, use_container_width=True)
-    with c2:
-        st.markdown(f"#### Budget Health")
-        st.progress(min((spent/total_budget), 1.0))
-        st.caption(f"You have used **{(spent/total_budget)*100:.1f}%** of the original allocation.")
+# 4. VISUALS (Ghost Line Chart)
+st.markdown("### 📉 Financial Trajectory")
+chart_weeks = int(weeks_remaining) + 5
+dates = [today + timedelta(weeks=w) for w in range(chart_weeks)]
 
-# 4. AI REPORT SECTION
+# Actual Trajectory
+y_actual = [max(0, current_balance - (w * weekly_cost)) for w in range(chart_weeks)]
+# Ideal Trajectory (Ghost Line)
+ideal_burn = current_balance / weeks_remaining if weeks_remaining > 0 else 0
+y_ideal = [max(0, current_balance - (w * ideal_burn)) for w in range(chart_weeks)]
+
+df_chart = pd.DataFrame({
+    "Date": dates * 2,
+    "Balance": y_actual + y_ideal,
+    "Scenario": ["Current Trajectory"] * chart_weeks + ["Ideal (Break-Even)"] * chart_weeks
+})
+
+fig = px.line(df_chart, x="Date", y="Balance", color="Scenario", 
+              color_discrete_map={"Current Trajectory": color, "Ideal (Break-Even)": "#444"})
+fig.update_traces(line=dict(width=3))
+fig.update_traces(patch={"line": {"dash": "dot"}}, selector={"legendgroup": "Ideal (Break-Even)"})
+
+fig.add_vline(x=datetime.datetime.combine(plan_end, datetime.time.min).timestamp() * 1000, 
+              line_dash="dash", line_color="white", annotation_text="Plan End")
+
+fig.update_layout(height=350, hovermode="x unified", margin=dict(t=20, b=0, l=0, r=0), 
+                  paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                  legend=dict(orientation="h", y=1.1))
+st.plotly_chart(fig, use_container_width=True)
+
+# 5. DUAL-MODE AI REPORT (The Merge)
 st.markdown("---")
-col_ai_1, col_ai_2 = st.columns([3, 1])
-with col_ai_1:
-    st.subheader("🤖 Professional AI Assessment")
-    st.caption("Generates a formal strategy note using Google Gemini.")
+st.markdown("### 🤖 Professional Assessment")
 
-with col_ai_2:
-    generate_btn = st.button("Generate Report ✨", type="primary", use_container_width=True)
+# Radio to switch between API and Manual Prompt
+ai_method = st.radio("Method", ["Auto-Generate (Gemini)", "Manual Prompt (Free)"], horizontal=True, label_visibility="collapsed")
 
-if generate_btn:
-    if not api_key:
-         st.error("⚠️ Please add a Google Gemini API Key in the sidebar to use this feature.")
-    else:
-        with st.spinner("Analyzing financials and generating strategy..."):
-            ctx = {
-                "status": status,
-                "weeks_remaining": weeks_remaining,
-                "balance": current_balance,
-                "weekly_cost": weekly_cost,
-                "surplus_shortfall": surplus_shortfall
-            }
-            report = get_ai_analysis(api_key, ctx)
-            
-            st.success("Report Generated Successfully")
-            st.markdown(f"""
-            <div style="background-color: #1e2129; padding: 20px; border-radius: 10px; border-left: 5px solid {color};">
-                {report}
-            </div>
-            """, unsafe_allow_html=True)
+if ai_method == "Auto-Generate (Gemini)":
+    # === API MODE ===
+    c_ai1, c_ai2 = st.columns([3,1])
+    with c_ai1: st.caption("Drafts a formal file note using your API Key.")
+    with c_ai2: generate = st.button("Generate Note ✨", type="primary", use_container_width=True)
+    
+    if generate:
+        if api_key:
+            with st.spinner("Drafting..."):
+                ctx = {"status": status, "balance": current_balance, "weekly_cost": weekly_cost, 
+                       "hours": hours_per_week, "end_date": plan_end.strftime('%d/%m/%Y'),
+                       "weeks_remaining": weeks_remaining, "surplus_shortfall": surplus}
+                report = get_ai_analysis(api_key, ctx)
+                st.success("Drafted!")
+                st.text_area("Copy to CRM:", value=report, height=300)
+        else:
+            st.error("Add API Key in sidebar first.")
+
+else:
+    # === MANUAL PROMPT BRIDGE MODE ===
+    st.caption("Copy this prompt into **Grok**, **ChatGPT**, or **Claude** for a free professional report.")
+    
+    prompt_text = f"""Act as a Senior Australian NDIS Support Coordinator (Level 3 Specialist). 
+Write a formal "Viability & Strategy Report" for a participant file.
+
+**CONTEXT & DATA:**
+- **Status:** {status}
+- **Current Funds:** ${current_balance:,.2f} (Portal Truth)
+- **Plan Duration:** {weeks_remaining:.1f} weeks remaining (Ends {plan_end.strftime('%d/%m/%Y')})
+- **Burn Rate:** {hours_per_week} hrs/week (${weekly_cost:,.2f}/week)
+- **Projected Outcome:** {('Surplus of $' + "{:,.2f}".format(surplus)) if surplus > 0 else ('Shortfall of -$' + "{:,.2f}".format(abs(surplus)))}
+- **Runway:** {runway_weeks:.1f} weeks (Buffer: {buffer:+.1f} weeks)
+
+**INSTRUCTIONS:**
+1. **Tone:** Professional, objective, imperative, Australian English (e.g. 'Utilise', 'Minimise').
+2. **Format:** Use the following structure:
+   - **Executive Summary:** One concise paragraph on the file's overall viability.
+   - **Financial Health Check:** Bullet points analysing the burn rate vs. budget.
+   - **Risk Assessment:** Identify specific risks based on the data.
+   - **Action Plan:** 3 specific, imperative recommendations (e.g., "Reduce billing to {break_even:.1f} hrs/week immediately").
+
+**CONSTRAINT:** Do not include filler text. Go straight to the report.
+"""
+    st.code(prompt_text, language="text")
+    st.markdown(f"[Open Grok](https://x.com/i/grok) | [Open ChatGPT](https://chat.openai.com)")
 
 # FOOTER
 st.markdown("---")
-st.markdown("""
-    <div style='text-align: center; color: #666; font-size: 0.8em;'>
-        © 2025 Xyston Pty Ltd | NDIS Viability Master<br>
-        Built by Chas Walker
-    </div>
-""", unsafe_allow_html=True)
+st.caption("© 2025 Xyston Pty Ltd | Built by Chas Walker")
